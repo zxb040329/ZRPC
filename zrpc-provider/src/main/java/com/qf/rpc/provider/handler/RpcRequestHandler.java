@@ -9,8 +9,12 @@ import com.provider.rpc.protocal.RpcProtocol;
 import com.provider.rpc.protocal.StatusEnum;
 import com.qf.rpc.provider.cache.LocalCache;
 import com.qf.rpc.provider.processor.BusinessThreadPool;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.channel.group.ChannelGroup;
+import io.netty.channel.group.DefaultChannelGroup;
+import io.netty.util.concurrent.GlobalEventExecutor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cglib.reflect.FastClass;
 
@@ -23,6 +27,9 @@ import java.util.concurrent.ThreadPoolExecutor;
  **/
 @Slf4j
 public class RpcRequestHandler extends SimpleChannelInboundHandler<RpcProtocol<RpcRequest>> {
+
+    private static ChannelGroup channelGroup = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
+
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, RpcProtocol<RpcRequest> msg) throws Exception {
 
@@ -76,5 +83,22 @@ public class RpcRequestHandler extends SimpleChannelInboundHandler<RpcProtocol<R
         //通过索引的方式定位到具体方法
         final int index = fastClass.getIndex(request.getMethodName(), request.getParameterTypes());
         return fastClass.invoke(index,bean,request.getParams());
+    }
+
+
+    @Override
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        Channel channel = ctx.channel();
+
+        channelGroup.add(channel);
+        log.info("有新的客户端连接上来：{},同时连接着{}个客户端",channel.remoteAddress(),channelGroup.size());
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        Channel channel = ctx.channel();
+        log.info("客户端{}断开连接",channel.remoteAddress());
+
+        channelGroup.remove(channel);
     }
 }
